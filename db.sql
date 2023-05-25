@@ -9,7 +9,16 @@ CREATE TABLE Accounts (
     image TEXT,
     language VARCHAR(4),
     theme VARCHAR(20),
-    github_id VARCHAR(255) UNIQUE,
+    github_id VARCHAR(255) UNIQUE DEFAULT NULL,
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create the Accounts_recovery table
+CREATE TABLE Accounts_recovery (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email varchar(255),
+    code VARCHAR(8),
+    used boolean DEFAULT false,
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -27,23 +36,21 @@ CREATE TABLE Projects (
 CREATE TABLE Tasks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     Description TEXT,
-    assigned_to INT,
+    assigned_to INT REFERENCES Accounts(id),
     assigning_day DATE,
     duration_in_day INT,
     difficulty INT CHECK (difficulty >= 1 AND difficulty <= 100),
-    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (assigned_to) REFERENCES Accounts(id)
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    
 );
 
 -- Create the Account_Projects table
 CREATE TABLE Account_Projects (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    participent INT,
-    project INT,
+    participent INT REFERENCES Accounts(id),
+    project INT  REFERENCES Projects(id),
     role VARCHAR(255) DEFAULT 'member',
-    UNIQUE(participent, project),
-    FOREIGN KEY (participent) REFERENCES Accounts(id),
-    FOREIGN KEY (project) REFERENCES Projects(id)
+    UNIQUE(participent, project)
 );
 
 -- Create the Conversation table
@@ -57,11 +64,9 @@ CREATE TABLE Conversation (
 -- Create the Conversation_Participent table
 CREATE TABLE Conversation_Participent (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    conversation INT,
-    participent INT,
-    role VARCHAR(255),
-    FOREIGN KEY (conversation) REFERENCES Conversation(id),
-    FOREIGN KEY (participent) REFERENCES Accounts(id)
+    conversation INT REFERENCES Conversation(id),
+    participent INT REFERENCES Accounts(id),
+    role VARCHAR(255)
 );
 
 -- Create the Conversation_Message table
@@ -69,6 +74,5 @@ CREATE TABLE Conversation_Message (
     id INT AUTO_INCREMENT PRIMARY KEY,
     type VARCHAR(255),
     content TEXT,
-    Autor INT,
-    FOREIGN KEY (Autor) REFERENCES Conversation_Participent(id)
+    Autor INT REFERENCES Conversation_Participent(id)
 );
