@@ -250,7 +250,7 @@ App.post('/signup',upload.any(), async (req, res) => {
 
                 return res.json({'success':false,'msg':err});
             }
-            const token = jwt.sign({email:Account.email,password:Account.password,id:Account.id},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
+            const token = jwt.sign({email:Account.email,password:Account.password,id:result.insertId},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
             TOKEN_LOG[getFullDate()] ? TOKEN_LOG[getFullDate()].push(token) : TOKEN_LOG[getFullDate()] = [token];
             res.json({'success':true,'msg':{token,pfp:Account["image"].webContentLink,lang:'ENG',theme:'Dark'}});
         });
@@ -266,7 +266,7 @@ App.post('/friends', async (req, res) => {
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
 
     // console.log(tokendata);
-
+    console.log(tokendata.id);
     connection.query("select id,image,username,email,fname,lname from Accounts where id <> ?",[tokendata.id],async (e,r)=>{
         connection.query('select * from Friends where f1 = ? or f2 = ?',[tokendata.id,tokendata.id],(err,result)=>{
             for (let i in r){
