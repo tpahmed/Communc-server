@@ -102,12 +102,13 @@ App.use(bodyparser.urlencoded({extended:0}));
 App.use(bodyparser.json());
 App.use((req,res,next)=>{
     res.set("Access-Control-Allow-Origin",'*');
+    res.set("Access-Control-Allow-Headers",'*');
     next()
 });
 
 
 App.get('/', (req,res)=>{
-    connection.query("select * from Accounts_recovery",(err,result)=>{
+    connection.query("select * from Accounts",(err,result)=>{
         if (err){
             res.json({'success':false,'msg':err});
             return
@@ -128,7 +129,7 @@ App.post('/login', (req,res)=>{
             return res.json({'success':false,'msg':"Wrong Credentials"});
         }
         console.log(result[0].image)
-        const token = jwt.sign({email,password},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
+        const token = jwt.sign({email,password,id:result[0].id},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
         TOKEN_LOG[getFullDate()] ? TOKEN_LOG[getFullDate()].push(token) : TOKEN_LOG[getFullDate()] = [token];
         res.json({'success':true,'msg':{token,pfp:result[0].image,lang:result[0].language,theme:result[0].theme}});
     });
@@ -249,11 +250,51 @@ App.post('/signup',upload.any(), async (req, res) => {
 
                 return res.json({'success':false,'msg':err});
             }
-            const token = jwt.sign({email:Account.email,password:Account.password},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
+            const token = jwt.sign({email:Account.email,password:Account.password,id:Account.id},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
             TOKEN_LOG[getFullDate()] ? TOKEN_LOG[getFullDate()].push(token) : TOKEN_LOG[getFullDate()] = [token];
             res.json({'success':true,'msg':{token,pfp:Account["image"].webContentLink,lang:'ENG',theme:'Dark'}});
         });
         // res.json({'success':false,'msg':"{token}"});
+    });
+});
+
+// get friends
+App.post('/friends', async (req, res) => {
+    const { body } = req;
+    const { token } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+
+    // console.log(tokendata);
+
+    connection.query("select id,image,username,email,fname,lname from Accounts where id <> ?",[tokendata.id],async (e,r)=>{
+        connection.query('select * from Friends where f1 = ? or f2 = ?',[tokendata.id,tokendata.id],(err,result)=>{
+            for (let i in r){
+                r[i]['isfriend'] = false;
+            }
+            for (let i in r){
+                for (let y in result){
+                    if ([result[y].f1,result[y].f2].includes(r[i].id)){
+                        r[i]['isfriend'] = true;
+                    }
+                }
+            }
+            res.json({success:true,msg:r});
+        })
+    });
+});
+
+// delete friend
+App.post('/friends/delete', async (req, res) => {
+    const { body } = req;
+    const { token, id } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+
+
+    connection.query("DELETE from Friends where (f1 = ? or f2 = ?) and (f1 = ? or f2 = ?)",[tokendata.id,tokendata.id,id,id],async (e,r)=>{
+        console.log(r)
+        res.json({success:true});
     });
 });
 

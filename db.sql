@@ -13,6 +13,22 @@ CREATE TABLE Accounts (
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create the Friends table
+CREATE TABLE Friends (
+    f1 INT REFERENCES Accounts(id),
+    f2 INT REFERENCES Accounts(id),
+    PRIMARY key (f1,f2),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create the Friend_Requests table
+CREATE TABLE Friend_Requests (
+    from_acc INT REFERENCES Accounts(id),
+    to_acc INT REFERENCES Accounts(id),
+    PRIMARY key (from_acc,to_acc),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create the Accounts_recovery table
 CREATE TABLE Accounts_recovery (
     id INT AUTO_INCREMENT PRIMARY KEY,
