@@ -131,7 +131,7 @@ App.post('/login', (req,res)=>{
         console.log(result[0].image)
         const token = jwt.sign({email,password,id:result[0].id},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
         TOKEN_LOG[getFullDate()] ? TOKEN_LOG[getFullDate()].push(token) : TOKEN_LOG[getFullDate()] = [token];
-        res.json({'success':true,'msg':{token,pfp:result[0].image,lang:result[0].language,theme:result[0].theme}});
+        res.json({'success':true,'msg':{token,pfp:result[0].image.replace('download','view'),lang:result[0].language,theme:result[0].theme}});
     });
 });
 
@@ -245,14 +245,14 @@ App.post('/signup',upload.any(), async (req, res) => {
             console.log(res);
             return res.data
         });
-        connection.query("insert into Accounts values (Null,?,?,?,?,?,?,?,?,NULL,CURRENT_TIMESTAMP)",[Account.username,Account.first_name,Account.last_name,Account.email,Account.password,Account.image.webContentLink,'ENG','Dark'],(err,result)=>{
+        connection.query("insert into Accounts values (Null,?,?,?,?,?,?,?,?,NULL,CURRENT_TIMESTAMP)",[Account.username,Account.first_name,Account.last_name,Account.email,Account.password,Account.image.webContentLink.replace('download','view'),'ENG','Dark'],(err,result)=>{
             if (err){
 
                 return res.json({'success':false,'msg':err});
             }
             const token = jwt.sign({email:Account.email,password:Account.password,id:result.insertId},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
             TOKEN_LOG[getFullDate()] ? TOKEN_LOG[getFullDate()].push(token) : TOKEN_LOG[getFullDate()] = [token];
-            res.json({'success':true,'msg':{token,pfp:Account["image"].webContentLink,lang:'ENG',theme:'Dark'}});
+            res.json({'success':true,'msg':{token,pfp:Account["image"].webContentLink.replace('download','view'),lang:'ENG',theme:'Dark'}});
         });
         // res.json({'success':false,'msg':"{token}"});
     });
@@ -273,10 +273,12 @@ App.post('/friends', async (req, res) => {
                 r[i]['isfriend'] = false;
             }
             for (let i in r){
+                r[i].image = r[i].image.replace('download','view') 
                 for (let y in result){
                     if ([result[y].f1,result[y].f2].includes(r[i].id)){
                         r[i]['isfriend'] = true;
                     }
+
                 }
             }
             res.json({success:true,msg:r});
@@ -293,7 +295,19 @@ App.post('/friends/delete', async (req, res) => {
 
 
     connection.query("DELETE from Friends where (f1 = ? or f2 = ?) and (f1 = ? or f2 = ?)",[tokendata.id,tokendata.id,id,id],async (e,r)=>{
-        console.log(r)
+        res.json({success:true});
+    });
+});
+// request friend
+App.post('/friends/request', async (req, res) => {
+    const { body } = req;
+    const { token, id } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+
+    connection.query("insert into Friend_Requests values (?, ?,CURRENT_TIMESTAMP)",[tokendata.id,id],async (e,r)=>{
+        console.log(e)
         res.json({success:true});
     });
 });
