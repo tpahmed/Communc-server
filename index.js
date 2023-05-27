@@ -271,6 +271,7 @@ App.post('/friends', async (req, res) => {
         connection.query('select * from Friends where f1 = ? or f2 = ?',[tokendata.id,tokendata.id],(err,result)=>{
             for (let i in r){
                 r[i]['isfriend'] = false;
+                r[i]['friend_requested'] = false;
             }
             for (let i in r){
                 r[i].image = r[i].image.replace('download','view') 
@@ -278,10 +279,22 @@ App.post('/friends', async (req, res) => {
                     if ([result[y].f1,result[y].f2].includes(r[i].id)){
                         r[i]['isfriend'] = true;
                     }
-
+                    
                 }
             }
-            res.json({success:true,msg:r});
+            connection.query('select * from Friend_Requests where from_acc = ?',[tokendata.id],(err,result)=>{
+                
+                for (let i in r){
+                    for (let y in result){
+                        if (result[y].to_acc === r[i].id){
+                            r[i]['friend_requested'] = true;
+                        }
+                        
+                    }
+                }
+                res.json({success:true,msg:r});
+            });
+
         })
     });
 });
@@ -307,9 +320,44 @@ App.post('/friends/request', async (req, res) => {
     
 
     connection.query("insert into Friend_Requests values (?, ?,CURRENT_TIMESTAMP)",[tokendata.id,id],async (e,r)=>{
-        console.log(e)
         res.json({success:true});
     });
+});
+// actions with friend request 
+App.post('/friends/request/get', async (req, res) => {
+    const { body } = req;
+    const { token } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query("SELECT Accounts.id,Accounts.lname,Accounts.fname,Accounts.username,Accounts.image FROM Friend_Requests,Accounts where Friend_Requests.from_acc = Accounts.id and Friend_Requests.to_acc = ?",[tokendata.id],async (e,r)=>{
+        res.json({success:true,msg:r});
+    });
+});
+
+// actions with friend request 
+App.post('/friends/request/action', async (req, res) => {
+    const { body } = req;
+    const { token, id, action } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    console.log(action)
+    if (action == 'accept'){
+        connection.query("DELETE FROM Friend_Requests where to_acc = ? and from_acc = ?",[tokendata.id,id],async (e,r)=>{
+            connection.query("insert into Friends values (?, ?,CURRENT_TIMESTAMP)",[tokendata.id,id],async (e,r)=>{
+                res.json({success:true});
+            });
+        });
+    }
+    else if (action == 'decline'){
+        connection.query("DELETE FROM Friend_Requests where to_acc = ? and from_acc = ?",[tokendata.id,id],async (e,r)=>{res.json({success:true});});
+    }
+    else if (action == 'cancel'){
+        connection.query("DELETE FROM Friend_Requests where to_acc = ? and from_acc = ?",[id,tokendata.id],async (e,r)=>{res.json({success:true});});
+    }
+    else{
+        res.json({success:false});
+    }
 });
 
 
