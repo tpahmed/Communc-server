@@ -73,6 +73,7 @@ CREATE TABLE Account_Projects (
 CREATE TABLE Conversation (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255),
+    image VARCHAR(255),
     type VARCHAR(255),
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -82,7 +83,9 @@ CREATE TABLE Conversation_Participent (
     id INT AUTO_INCREMENT PRIMARY KEY,
     conversation INT REFERENCES Conversation(id),
     participent INT REFERENCES Accounts(id),
-    role VARCHAR(255)
+    role VARCHAR(255),
+    unique (conversation, participent),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create the Conversation_Message table

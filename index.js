@@ -341,7 +341,6 @@ App.post('/friends/request/action', async (req, res) => {
     const { token, id, action } = body;
 
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    console.log(action)
     if (action == 'accept'){
         connection.query("DELETE FROM Friend_Requests where to_acc = ? and from_acc = ?",[tokendata.id,id],async (e,r)=>{
             connection.query("insert into Friends values (?, ?,CURRENT_TIMESTAMP)",[tokendata.id,id],async (e,r)=>{
@@ -358,6 +357,27 @@ App.post('/friends/request/action', async (req, res) => {
     else{
         res.json({success:false});
     }
+});
+
+// get Account conversations
+App.post('/conversation/get', async (req, res) => {
+    const { body } = req;
+    const { token } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id  FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation",[tokendata.id],async (e,r)=>{
+        res.json({success:true,msg:r});
+    });
+});
+// get conversation messages
+App.post('/messages/get', async (req, res) => {
+    res.json({success:true,msg:[{id:1,lname:'boulaouane',fname:'ahmed',you:true,date:'6:22pm',type:'dsf',content:'https://drive.google.com/uc?id=1lY5HUbgjP1zUXsLO__oz3Eo1qUeKN_Al&export=download'}]});
+    // const { body } = req;
+    // const { token } = body;
+
+    // const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    // connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id  FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation",[tokendata.id],async (e,r)=>{
+    // });
 });
 
 
