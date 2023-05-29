@@ -371,13 +371,64 @@ App.post('/conversation/get', async (req, res) => {
 });
 // get conversation messages
 App.post('/messages/get', async (req, res) => {
-    res.json({success:true,msg:[{id:1,lname:'boulaouane',fname:'ahmed',you:true,date:'6:22pm',type:'dsf',content:'https://drive.google.com/uc?id=1lY5HUbgjP1zUXsLO__oz3Eo1qUeKN_Al&export=download'}]});
-    // const { body } = req;
-    // const { token } = body;
-
-    // const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    // connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id  FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation",[tokendata.id],async (e,r)=>{
-    // });
+    const { body } = req;
+    const { token,id } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query("select Conversation_Participent.id,Conversation_Participent.participent,Accounts.lname,Accounts.fname FROM Conversation_Participent,Accounts where Conversation_Participent.conversation = ? and Accounts.id = Conversation_Participent.participent",[id],async (e,r)=>{
+        let query = "select * FROM Conversation_Message where Autor = ?";
+        let participents_id = {};
+        for (let i in r){
+            query += " or Autor = ?";
+            participents_id[r[i].id] = r[i].participent;
+        }
+        if (!Object.values(participents_id).includes(tokendata.id)){
+            return res.json({success:false});
+        }
+        
+        connection.query(query.slice(0,-13),Object.keys(participents_id).map((e)=>Number(e)),async (err,result)=>{
+            for (let i in result){
+                result[i]['you'] = false;
+                result[i]['date'] = moment(result[i].creation_date).format('hh:mm A');
+                for (let y in r){
+                    if (r[y].id == result[i].Autor){
+                        result[i]['lname'] = r[y]['lname'];
+                        result[i]['fname'] = r[y]['fname'];
+                    }
+                }
+                if(participents_id[result[i].Autor] == tokendata.id){
+                    result[i]['you'] = true;
+                }
+            }
+            return res.json({success:true,msg:result});
+        });
+    });
+});
+// send message
+App.post('/messages/send', async (req, res) => {
+    const { body } = req;
+    const { token,id,content,type } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query("select id,participent FROM Conversation_Participent where conversation = ?",[id],async (e,r)=>{
+        let participents_id = {};
+        for (let i in r){
+            participents_id[r[i].participent] = r[i].id;
+        }
+        if (!Object.keys(participents_id).includes(`${tokendata.id}`)){
+            console.log(Object.keys(participents_id))
+            return res.json({success:false});
+        }
+        if (type == 'text'){
+            connection.query("Insert into Conversation_Message values (Null,?,?,?,CURRENT_TIMESTAMP)",[type,content,participents_id[tokendata.id]],async (err,result)=>{
+                return res.json({success:true});
+            });
+        }
+        else{
+            
+            return res.json({success:false});
+        }
+    });
 });
 
 

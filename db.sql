@@ -93,5 +93,6 @@ CREATE TABLE Conversation_Message (
     id INT AUTO_INCREMENT PRIMARY KEY,
     type VARCHAR(255),
     content TEXT,
-    Autor INT REFERENCES Conversation_Participent(id)
+    Autor INT REFERENCES Conversation_Participent(id),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
