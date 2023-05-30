@@ -8,13 +8,18 @@ const stream = require('stream');
 const multer = require('multer');
 const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
-const fs = require('fs');
+const App = express();
+const expressWS = require('express-ws')(App);
+const sharp = require("sharp");
 
 dotenv.config();
 
-const App = express();
+
+const storage = multer.memoryStorage();
+
 const upload = multer({
-    limits: { fieldSize: 25 * 1024 * 1024 }
+    limits: { fieldSize: 25 * 1024 * 1024 },
+    storage
 });
 
 const {
@@ -22,7 +27,8 @@ const {
     CLIENT_ID,
     CLIENT_SECRET,
     REDIRECT_URI,
-    REFRESH_TOKEN
+    REFRESH_TOKEN,
+    ACCESS_TOKEN
 } = process.env;
 
 const oauth2Client = new google.auth.OAuth2(
@@ -31,7 +37,7 @@ const oauth2Client = new google.auth.OAuth2(
     REDIRECT_URI
     );
     
-oauth2Client.setCredentials({refresh_token:REFRESH_TOKEN});
+oauth2Client.setCredentials({refresh_token:REFRESH_TOKEN,access_token:ACCESS_TOKEN});
 
 const drive = google.drive({ version: 'v3',auth:oauth2Client });
 
@@ -39,7 +45,7 @@ const drive = google.drive({ version: 'v3',auth:oauth2Client });
 
 const uploadFile = async (fileObject) => {
     const bufferStream = new stream.PassThrough();
-    bufferStream.end(fileObject.buffer);
+    bufferStream.end(await sharp(fileObject.buffer).webp({ quality: 20 }).toBuffer());
     const { data } = await drive.files.create({
       media: {
         mimeType: fileObject.mimeType,
@@ -96,8 +102,6 @@ const PORT = 4055;
 
 
 
-
-
 App.use(bodyparser.urlencoded({extended:0}));
 App.use(bodyparser.json());
 App.use((req,res,next)=>{
@@ -128,7 +132,6 @@ App.post('/login', (req,res)=>{
         if (!result.length){
             return res.json({'success':false,'msg':"Wrong Credentials"});
         }
-        console.log(result[0].image)
         const token = jwt.sign({email,password,id:result[0].id},PRIVATE_KEY, { expiresIn: 60 * 60 * 24 * 30 });
         TOKEN_LOG[getFullDate()] ? TOKEN_LOG[getFullDate()].push(token) : TOKEN_LOG[getFullDate()] = [token];
         res.json({'success':true,'msg':{token,pfp:result[0].image.replace('download','view'),lang:result[0].language,theme:result[0].theme}});
@@ -176,9 +179,7 @@ App.post('/forgot', (req,res)=>{
             text:`your recovery code is ${code}`
         });
 
-        console.log(result)
         connection.query("insert into Accounts_recovery values (Null,?,?,false,CURRENT_TIMESTAMP)",[result[0].email,code],(err,result)=>{
-            // console.log(err,result)
             return res.json({'success':true});
         })
     });
@@ -189,7 +190,6 @@ App.post('/validate', (req,res)=>{
     const email = req.body.email;
     const code = req.body.code;
     connection.query("select *,CURRENT_TIMESTAMP from Accounts_recovery where email = ? and used = 0 order by id desc",[email],async (err,result)=>{
-        console.log();
         if(!result.length || result[0].code !== code || moment.duration(moment(result[0]['current_timestamp()']).diff(moment(result[0].creation_date))).asMinutes() > 15){
             return res.json({'success':false});
         }
@@ -242,7 +242,6 @@ App.post('/signup',upload.any(), async (req, res) => {
             fileId:imgId.id,
             fields:'webContentLink'
         }).then((res)=>{
-            console.log(res);
             return res.data
         });
         connection.query("insert into Accounts values (Null,?,?,?,?,?,?,?,?,NULL,CURRENT_TIMESTAMP)",[Account.username,Account.first_name,Account.last_name,Account.email,Account.password,Account.image.webContentLink.replace('download','view'),'ENG','Dark'],(err,result)=>{
@@ -265,8 +264,6 @@ App.post('/friends', async (req, res) => {
 
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
 
-    // console.log(tokendata);
-    console.log(tokendata.id);
     connection.query("select id,image,username,email,fname,lname from Accounts where id <> ?",[tokendata.id],async (e,r)=>{
         connection.query('select * from Friends where f1 = ? or f2 = ?',[tokendata.id,tokendata.id],(err,result)=>{
             for (let i in r){
@@ -405,8 +402,8 @@ App.post('/messages/get', async (req, res) => {
     });
 });
 // send message
-App.post('/messages/send', async (req, res) => {
-    const { body } = req;
+App.post('/messages/send',upload.any(), async (req, res) => {
+    const { body,files } = req;
     const { token,id,content,type } = body;
     
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
@@ -416,12 +413,41 @@ App.post('/messages/send', async (req, res) => {
             participents_id[r[i].participent] = r[i].id;
         }
         if (!Object.keys(participents_id).includes(`${tokendata.id}`)){
-            console.log(Object.keys(participents_id))
             return res.json({success:false});
         }
         if (type == 'text'){
             connection.query("Insert into Conversation_Message values (Null,?,?,?,CURRENT_TIMESTAMP)",[type,content,participents_id[tokendata.id]],async (err,result)=>{
+                expressWS.getWss().clients.forEach((webs)=>{
+                    webs.send(JSON.stringify({"type":"refresh","data":id}));
+                })
                 return res.json({success:true});
+
+            });
+        }
+        else if (type == 'image'){
+            const imgId = await uploadFile(files[0]);
+            await drive.permissions.create({
+                fileId:imgId.id,
+                requestBody:{
+                    role:"reader",
+                    type:"anyone"
+                }
+            }).then(()=>{
+                return
+            })
+            const image = await drive.files.get({
+                fileId:imgId.id,
+                fields:'webContentLink'
+            }).then((res)=>{
+                return res.data
+            });
+            // .replace('download','view')
+            connection.query("Insert into Conversation_Message values (Null,?,?,?,CURRENT_TIMESTAMP)",[type,image.webContentLink.replace('download','view'),participents_id[tokendata.id]],async (err,result)=>{
+                expressWS.getWss().clients.forEach((webs)=>{
+                    webs.send(JSON.stringify({"type":"refresh","data":id}));
+                })
+                return res.json({success:true});
+
             });
         }
         else{
@@ -431,6 +457,10 @@ App.post('/messages/send', async (req, res) => {
     });
 });
 
+App.ws('/messages',(ws,res)=>{
+    
+    ws.send(JSON.stringify({"type":"connected"}));
+});
 
 
 App.listen(PORT,()=>console.log(`server on port ${PORT}`));
