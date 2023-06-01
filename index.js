@@ -37,7 +37,7 @@ const oauth2Client = new google.auth.OAuth2(
     REDIRECT_URI
     );
     
-oauth2Client.setCredentials({refresh_token:REFRESH_TOKEN,access_token:ACCESS_TOKEN});
+oauth2Client.setCredentials({refresh_token:REFRESH_TOKEN});
 
 const drive = google.drive({ version: 'v3',auth:oauth2Client });
 
@@ -300,14 +300,115 @@ App.post('/friends', async (req, res) => {
 App.post('/friends/delete', async (req, res) => {
     const { body } = req;
     const { token, id } = body;
-
-    const tokendata  = jwt.verify(token,PRIVATE_KEY);
-
-
-    connection.query("DELETE from Friends where (f1 = ? or f2 = ?) and (f1 = ? or f2 = ?)",[tokendata.id,tokendata.id,id,id],async (e,r)=>{
-        res.json({success:true});
+  
+    const tokendata = jwt.verify(token, PRIVATE_KEY);
+  
+    connection.beginTransaction(async (err) => {
+      if (err) {
+        throw err;
+      }
+  
+      try {
+        // Get the conversations of type 'direct' involving the two friends
+        const conversations = await new Promise((resolve, reject) => {
+          connection.query(
+            `
+            SELECT c.id
+            FROM Conversation c
+            INNER JOIN Conversation_Participent cp ON c.id = cp.conversation
+            WHERE c.type = 'direct'
+            AND cp.participent IN (?, ?)
+            GROUP BY c.id
+            HAVING COUNT(DISTINCT cp.participent) = 2
+            `,
+            [tokendata.id, id],
+            (error, results) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve(results);
+              }
+            }
+          );
+        });
+  
+        // Delete the messages associated with the conversations
+        for (const conversation of conversations) {
+          await new Promise((resolve, reject) => {
+            connection.query(
+              'DELETE FROM Conversation_Message WHERE Autor IN (SELECT id FROM Conversation_Participent WHERE conversation = ?)',
+              [conversation.id],
+              (error) => {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve();
+                }
+              }
+            );
+          });
+        }
+  
+        // Delete the conversation participants associated with the conversations
+        await new Promise((resolve, reject) => {
+          connection.query(
+            'DELETE FROM Conversation_Participent WHERE conversation IN (SELECT id FROM Conversation WHERE type = "direct")',
+            (error) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
+  
+        // Delete the conversations of type 'direct'
+        await new Promise((resolve, reject) => {
+          connection.query(
+            'DELETE FROM Conversation WHERE type = "direct"',
+            (error) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
+  
+        // Delete the friendship
+        await new Promise((resolve, reject) => {
+          connection.query(
+            'DELETE FROM Friends WHERE (f1 = ? OR f2 = ?) AND (f1 = ? OR f2 = ?)',
+            [tokendata.id, tokendata.id, id, id],
+            (error) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve();
+              }
+            }
+          );
+        });
+  
+        // Commit the transaction
+        connection.commit((error) => {
+          if (error) {
+            throw error;
+          }
+  
+          res.json({ success: true });
+        });
+      } catch (error) {
+        // Rollback the transaction in case of any error
+        connection.rollback(() => {
+          throw error;
+        });
+      }
     });
-});
+  });
+  
 // request friend
 App.post('/friends/request', async (req, res) => {
     const { body } = req;
@@ -341,7 +442,11 @@ App.post('/friends/request/action', async (req, res) => {
     if (action == 'accept'){
         connection.query("DELETE FROM Friend_Requests where to_acc = ? and from_acc = ?",[tokendata.id,id],async (e,r)=>{
             connection.query("insert into Friends values (?, ?,CURRENT_TIMESTAMP)",[tokendata.id,id],async (e,r)=>{
-                res.json({success:true});
+                connection.query("insert into Conversation values (NULL,'','','direct',CURRENT_TIMESTAMP)",[],(err,result)=>{
+                    connection.query(`insert into Conversation_Participent values (NULL,${result.insertId},?,'member',CURRENT_TIMESTAMP),(NULL,${result.insertId},?,'member',CURRENT_TIMESTAMP)`,[tokendata.id,id],(err,result)=>{
+                        res.json({success:true});
+                    });
+                });
             });
         });
     }
@@ -363,9 +468,34 @@ App.post('/conversation/get', async (req, res) => {
 
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
     connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id  FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation",[tokendata.id],async (e,r)=>{
-        res.json({success:true,msg:r});
+        let direct_list = [];
+        let query = '';
+        for (let i in r){
+            if(r[i].type == 'direct'){
+                direct_list.push(r[i].id);
+                query += '?,';
+            }
+        }
+        if(direct_list.length){
+            connection.query(`select Accounts.image,Accounts.lname,Accounts.fname,Conversation_Participent.conversation from Accounts,Conversation_Participent where Accounts.id = Conversation_Participent.participent and Conversation_Participent.participent <> ? and Conversation_Participent.conversation in (${query.slice(0,-1)})`,[tokendata.id,...direct_list],(err,result)=>{
+                for (let i in r){
+                    for (let y in result){
+                        if(r[i].id == result[y].conversation){
+                            r[i].name = result[y].lname + ' ' + result[y].fname;
+                            r[i].image = result[y].image;
+                        }
+                    }
+                }
+                return res.json({success:true,msg:r});
+
+            });
+        }
+        else{
+            return res.json({success:true,msg:r});
+        }
     });
 });
+
 // get conversation messages
 App.post('/messages/get', async (req, res) => {
     const { body } = req;
