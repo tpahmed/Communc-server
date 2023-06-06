@@ -467,7 +467,7 @@ App.post('/conversation/get', async (req, res) => {
     const { token } = body;
 
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id  FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation",[tokendata.id],async (e,r)=>{
+    connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id,'' as acc_id  FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation",[tokendata.id],async (e,r)=>{
         let direct_list = [];
         let query = '';
         for (let i in r){
@@ -477,15 +477,17 @@ App.post('/conversation/get', async (req, res) => {
             }
         }
         if(direct_list.length){
-            connection.query(`select Accounts.image,Accounts.lname,Accounts.fname,Conversation_Participent.conversation from Accounts,Conversation_Participent where Accounts.id = Conversation_Participent.participent and Conversation_Participent.participent <> ? and Conversation_Participent.conversation in (${query.slice(0,-1)})`,[tokendata.id,...direct_list],(err,result)=>{
+            connection.query(`select Accounts.id,Accounts.image,Accounts.lname,Accounts.fname,Conversation_Participent.conversation from Accounts,Conversation_Participent where Accounts.id = Conversation_Participent.participent and Conversation_Participent.participent <> ? and Conversation_Participent.conversation in (${query.slice(0,-1)})`,[tokendata.id,...direct_list],(err,result)=>{
                 for (let i in r){
                     for (let y in result){
                         if(r[i].id == result[y].conversation){
                             r[i].name = result[y].lname + ' ' + result[y].fname;
                             r[i].image = result[y].image;
+                            r[i].acc_id = result[y].id;
                         }
                     }
                 }
+                console.log(r)
                 return res.json({success:true,msg:r});
 
             });
@@ -586,6 +588,35 @@ App.post('/messages/send',upload.any(), async (req, res) => {
         }
     });
 });
+// actions with friend request 
+App.post('/group/create',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token, name, members } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    const imgId = await uploadFile(files[0]);
+    await drive.permissions.create({
+        fileId:imgId.id,
+        requestBody:{
+            role:"reader",
+            type:"anyone"
+        }
+    }).then(()=>{
+        return
+    })
+    const image = await drive.files.get({
+        fileId:imgId.id,
+        fields:'webContentLink'
+    }).then((res)=>{
+        return res.data
+    });
+    connection.query("insert into Conversation values (NULL,?,?,'group',CURRENT_TIMESTAMP)",[name,image.webContentLink.replace('download','view')],(err,result)=>{
+        connection.query(`insert into Conversation_Participent values (NULL,${result.insertId},?,'owner',CURRENT_TIMESTAMP)${`,(NULL,${result.insertId},?,'member',CURRENT_TIMESTAMP)`.repeat(JSON.parse(members).length)}`,[tokendata.id,...JSON.parse(members)],(err,result)=>{
+            res.json({success:true});
+        });
+    });
+});
+
+
 
 App.ws('/messages',(ws,res)=>{
     
