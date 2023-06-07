@@ -588,7 +588,7 @@ App.post('/messages/send',upload.any(), async (req, res) => {
         }
     });
 });
-// actions with friend request 
+// create groupe
 App.post('/group/create',upload.any(), async (req, res) => {
     const { body,files } = req;
     const { token, name, members } = body;
@@ -613,6 +613,15 @@ App.post('/group/create',upload.any(), async (req, res) => {
         connection.query(`insert into Conversation_Participent values (NULL,${result.insertId},?,'owner',CURRENT_TIMESTAMP)${`,(NULL,${result.insertId},?,'member',CURRENT_TIMESTAMP)`.repeat(JSON.parse(members).length)}`,[tokendata.id,...JSON.parse(members)],(err,result)=>{
             res.json({success:true});
         });
+    });
+});
+// get profile info 
+App.post('/profile/get',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query("SELECT username,lname,fname,email,image from Accounts where id = ?",[tokendata.id],(err,result)=>{
+        res.json({success:true,msg:result});
     });
 });
 
