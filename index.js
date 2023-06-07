@@ -244,7 +244,7 @@ App.post('/signup',upload.any(), async (req, res) => {
         }).then((res)=>{
             return res.data
         });
-        connection.query("insert into Accounts values (Null,?,?,?,?,?,?,?,?,NULL,CURRENT_TIMESTAMP)",[Account.username,Account.first_name,Account.last_name,Account.email,Account.password,Account.image.webContentLink.replace('download','view'),'ENG','Dark'],(err,result)=>{
+        connection.query("insert into Accounts values (Null,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",[Account.username,Account.first_name,Account.last_name,Account.email,Account.password,Account.image.webContentLink.replace('download','view'),'ENG','Dark'],(err,result)=>{
             if (err){
 
                 return res.json({'success':false,'msg':err});
@@ -487,7 +487,6 @@ App.post('/conversation/get', async (req, res) => {
                         }
                     }
                 }
-                console.log(r)
                 return res.json({success:true,msg:r});
 
             });
@@ -620,8 +619,45 @@ App.post('/profile/get',upload.any(), async (req, res) => {
     const { body,files } = req;
     const { token } = body;
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    connection.query("SELECT username,lname,fname,email,image from Accounts where id = ?",[tokendata.id],(err,result)=>{
+    connection.query("SELECT username,lname,fname,email,image,theme,language from Accounts where id = ?",[tokendata.id],(err,result)=>{
         res.json({success:true,msg:result});
+    });
+});
+// edit profile info 
+App.post('/profile/edit',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,account } = body;
+    const accountData = JSON.parse(account);
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    const Account  = await new Promise((resolve,reject)=>{
+        connection.query('SELECT * FROM Accounts where id = ?',[tokendata.id],((e,r)=>{
+            if(e){
+                return reject(e);
+            }
+            resolve(r[0]);
+        })) 
+    });
+
+    const AccountSameEmail  = await new Promise((resolve,reject)=>{
+        connection.query('SELECT * FROM Accounts where email = ? and id <> ?',[accountData.email,tokendata.id],((e,r)=>{
+            if(e){
+                return reject(e);
+            }
+            resolve(r);
+        })) 
+    });
+    if(AccountSameEmail.length){
+        return res.json({success:false,msg:"Email already in use"});
+    }
+    else if (accountData.old_pass && accountData.old_pass !== Account.password){
+        return res.json({success:false,msg:"Password is Wrong"});
+    }
+    else if(accountData.new_pass){
+        Account.password = accountData.new_pass;
+    }
+    
+    connection.query(`UPDATE Accounts set lname = ?,fname = ?,email = ?,password = ?,theme = ? where id = ?`,[accountData.lname,accountData.fname,accountData.email,Account.password,accountData.theme,tokendata.id],(err,result)=>{
+        res.json({success:true});
     });
 });
 

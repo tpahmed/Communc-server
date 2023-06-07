@@ -9,7 +9,6 @@ CREATE TABLE Accounts (
     image TEXT,
     language VARCHAR(4),
     theme VARCHAR(20),
-    github_id VARCHAR(255) UNIQUE DEFAULT NULL,
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
