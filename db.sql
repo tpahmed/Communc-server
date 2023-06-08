@@ -95,3 +95,11 @@ CREATE TABLE Conversation_Message (
     Autor INT REFERENCES Conversation_Participent(id),
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Create the Bug_Report table
+CREATE TABLE Bug_Report (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    Description TEXT,
+    Autor INT REFERENCES Conversation_Participent(id),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

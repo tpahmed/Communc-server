@@ -661,6 +661,52 @@ App.post('/profile/edit',upload.any(), async (req, res) => {
     });
 });
 
+// bug report
+App.post('/profile/edit/image',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,old_image } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    const old_imageId = /id=.*&/.exec(old_image)[0].slice(3,-1);
+    try{
+        await deleteFile(old_imageId);
+
+    }
+    catch(err){
+
+    }
+
+    const imgId = await uploadFile(files[0]);
+    await drive.permissions.create({
+        fileId:imgId.id,
+        requestBody:{
+            role:"reader",
+            type:"anyone"
+        }
+    }).then(()=>{
+        return
+    })
+    const image = await drive.files.get({
+        fileId:imgId.id,
+        fields:'webContentLink'
+    }).then((res)=>{
+        return res.data
+    });
+    connection.query(`UPDATE Accounts set image = ? where id = ?`,[image.webContentLink.replace('download','view'),tokendata.id],(err,result)=>{
+        res.json({success:true});
+    });
+});
+
+// bug report
+App.post('/report',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,message } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query(`INSERT INTO Bug_Report values (NULL,?,?,CURRENT_TIMESTAMP)`,[message,tokendata.id],(err,result)=>{
+        res.json({success:true});
+    });
+});
+
 
 
 App.ws('/messages',(ws,res)=>{
