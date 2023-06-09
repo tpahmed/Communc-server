@@ -496,6 +496,23 @@ App.post('/conversation/get', async (req, res) => {
         }
     });
 });
+// get Account conversations
+App.post('/conversation/info', async (req, res) => {
+    const { body } = req;
+    const { token,id } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation and Conversation.id = ?",[tokendata.id,id],async (e,r)=>{
+        if (!r.length){
+            return res.json({success: false,msg:{}});
+        }
+        connection.query(`select Accounts.id,Accounts.image,Accounts.lname,Accounts.fname from Accounts,Conversation_Participent where Accounts.id = Conversation_Participent.participent and Conversation_Participent.participent <> ? and Conversation_Participent.conversation = ?`,[tokendata.id,id],(err,result)=>{
+            r[0].participents = result;
+            return res.json({success:true,msg:r[0]});
+
+        });
+    });
+});
 
 // get conversation messages
 App.post('/messages/get', async (req, res) => {
