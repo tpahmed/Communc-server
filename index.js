@@ -500,19 +500,107 @@ App.post('/conversation/get', async (req, res) => {
 App.post('/conversation/info', async (req, res) => {
     const { body } = req;
     const { token,id } = body;
-
+    
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation and Conversation.id = ?",[tokendata.id,id],async (e,r)=>{
+    connection.query("select Conversation.image,Conversation.name,Conversation.type,Conversation.id,Conversation_Participent.role FROM Conversation,Conversation_Participent where Conversation_Participent.participent = ? and Conversation.id = Conversation_Participent.conversation and Conversation.id = ?",[tokendata.id,id],async (e,r)=>{
         if (!r.length){
             return res.json({success: false,msg:{}});
         }
-        connection.query(`select Accounts.id,Accounts.image,Accounts.lname,Accounts.fname from Accounts,Conversation_Participent where Accounts.id = Conversation_Participent.participent and Conversation_Participent.participent <> ? and Conversation_Participent.conversation = ?`,[tokendata.id,id],(err,result)=>{
+        connection.query(`select Accounts.id,Accounts.image,Accounts.lname,Accounts.fname,Conversation_Participent.role from Accounts,Conversation_Participent where Accounts.id = Conversation_Participent.participent and Conversation_Participent.conversation = ?`,[id],(err,result)=>{
             r[0].participents = result;
             return res.json({success:true,msg:r[0]});
 
         });
     });
 });
+// get non conversation participent friends
+App.post('/conversation/friends', async (req, res) => {
+    const { body } = req;
+    const { token,id } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+
+    connection.query("select f1,f2 FROM Friends where f1 = ? or f2 = ?",[tokendata.id,tokendata.id],async (e,r)=>{
+        
+        let friends_id = r.map(e=>Object.values(e).filter((e)=>e != tokendata.id)[0]);
+        connection.query(`select * FROM Accounts where id in (${friends_id.join(',')})`,[],async (e,result)=>{
+            connection.query("select participent FROM Conversation_Participent where conversation = ?",[id],async (e,r)=>{
+                let participents_id = r.map((e)=>Object.values(e)[0]);
+                friends_id = friends_id.filter((e)=>!participents_id.includes(e));
+                return res.json({success:true,msg:result.filter((e)=>friends_id.includes(e.id))});
+            });
+        });
+    });
+});
+
+
+// add conversations participent
+App.post('/conversation/add', async (req, res) => {
+    const { body } = req;
+    const { token,id,members } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    const membersdata = JSON.parse(members);
+    let insertData = [];
+    membersdata.forEach(e=>insertData.push(...[id,e]));
+
+    let query = '';
+    membersdata.forEach((e)=>query+=`(NULL,?,?,'member',CURRENT_TIMESTAMP),`);
+    connection.query(`INSERT INTO Conversation_Participent values ${query.slice(0,-1)}`,insertData,async (e,r)=>{
+        return res.json({success:true});
+    });
+});
+
+// delete conversations participent
+App.post('/conversation/delete', async (req, res) => {
+    const { body } = req;
+    const { token,id,member_id } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query(`select * from Conversation_Participent where participent = ? and conversation = ?`,[tokendata.id,id],async (e,r)=>{
+        if(!r[0] || r[0].role !== 'owner'){
+            return res.json({'success':false});
+        }
+        connection.query(`DELETE FROM Conversation_Participent  where participent = ? and conversation = ?`,[member_id,id],async (e,r)=>{
+            return res.json({success:true});
+        });
+
+    });
+});
+
+// quit group participent
+App.post('/group/quit', async (req, res) => {
+    const { body } = req;
+    const { token,id } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query(`DELETE FROM Conversation_Participent where conversation = ? and participent = ?`,[id,tokendata.id],async (e,r)=>{
+        return res.json({success:true});
+    });
+
+});
+
+// delete group participent
+App.post('/group/delete', async (req, res) => {
+    const { body } = req;
+    const { token,id } = body;
+    
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query(`select * from Conversation_Participent where participent = ? and conversation = ?`,[tokendata.id,id],async (e,r)=>{
+        if(!r[0] || r[0].role !== 'owner'){
+            return res.json({'success':false});
+        }
+        connection.query(`DELETE FROM Conversation_Participent where conversation = ?`,[id],async (e,r)=>{
+            connection.query(`DELETE FROM Conversation where id = ?`,[id],async (e,r)=>{
+                return res.json({success:true});
+            });
+        });
+
+    });
+});
+
 
 // get conversation messages
 App.post('/messages/get', async (req, res) => {
