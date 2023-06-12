@@ -12,6 +12,42 @@ CREATE TABLE Accounts (
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+CREATE TABLE Communities (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255),
+    image text,
+    color VARCHAR(255),
+    owner INT REFERENCES Accounts(id),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Community_Post (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    text TEXT,
+    type VARCHAR(255),
+    content TEXT,
+    votes BIGINT,
+    community INT REFERENCES Communities(id),
+    writer INT  REFERENCES Accounts(id),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Community_Comments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    content TEXT,
+    community_Post INT REFERENCES Community_Post(id),
+    writer INT REFERENCES Accounts(id),
+    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Community_Favorite (
+    communities INT REFERENCES Communities(id),
+    account INT REFERENCES Accounts(id),
+    PRIMARY KEY (communities, account)
+);
+
+
 -- Create the Friends table
 CREATE TABLE Friends (
     f1 INT REFERENCES Accounts(id),
@@ -35,28 +71,6 @@ CREATE TABLE Accounts_recovery (
     code VARCHAR(8),
     used boolean DEFAULT false,
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create the Projects table
-CREATE TABLE Projects (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    color VARCHAR(255),
-    data_dictionary JSON,
-    git_repository VARCHAR(255) UNIQUE,
-    figma_url VARCHAR(255),
-    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create the Tasks table
-CREATE TABLE Tasks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    Description TEXT,
-    assigned_to INT REFERENCES Accounts(id),
-    assigning_day DATE,
-    duration_in_day INT,
-    difficulty INT CHECK (difficulty >= 1 AND difficulty <= 100),
-    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    
 );
 
 -- Create the Account_Projects table

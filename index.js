@@ -813,6 +813,80 @@ App.post('/report',upload.any(), async (req, res) => {
 });
 
 
+// bug report
+App.post('/report',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,message } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query(`INSERT INTO Bug_Report values (NULL,?,?,CURRENT_TIMESTAMP)`,[message,tokendata.id],(err,result)=>{
+        res.json({success:true});
+    });
+});
+
+// get communities
+App.post('/communities/get',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+
+    connection.query(`Select communities from Community_Favorite where account = ?`,[tokendata.id],(err,r)=>{
+        connection.query(`Select * from Communities`,[],(err,result)=>{
+            res.json({success:true,msg:result.map((e)=>{e.favorite =  r.map(el=>Object.values(el)[0]).includes(e.id);return e})});
+        });
+    });
+});
+
+// add community
+App.post('/communities/add',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,title,color } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    console.log('hi')
+    const imgId = await uploadFile(files[0]);
+    await drive.permissions.create({
+        fileId:imgId.id,
+        requestBody:{
+            role:"reader",
+            type:"anyone"
+        }
+    }).then(()=>{
+        return
+    })
+    const image = await drive.files.get({
+        fileId:imgId.id,
+        fields:'webContentLink'
+    }).then((res)=>{
+        return res.data
+    });
+
+    connection.query(`INSERT INTO Communities values (NULL,?,?,?,?,CURRENT_TIMESTAMP)`,[title,image.webContentLink.replace('download','view'),color,tokendata.id],(err,result)=>{
+        
+        res.json({success:true});
+    });
+});
+
+// add favorite
+App.post('/favorite/add',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,id } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query(`SELECT * From Community_Favorite where account = ? and communities = ?`,[tokendata.id,id],(err,r)=>{
+        if (r.length){
+            connection.query(`DELETE From Community_Favorite where account = ? and communities = ?`,[tokendata.id,id],(err,result)=>{
+                res.json({success:true});
+            });
+            return;
+        }
+        connection.query(`INSERT INTO Community_Favorite values (?,?)`,[id,tokendata.id],(err,result)=>{
+            res.json({success:true});
+        });
+    });
+});
+
+
 
 App.ws('/messages',(ws,res)=>{
     
