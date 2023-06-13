@@ -461,6 +461,7 @@ App.post('/friends/request/action', async (req, res) => {
     }
 });
 
+
 // get Account conversations
 App.post('/conversation/get', async (req, res) => {
     const { body } = req;
@@ -496,6 +497,7 @@ App.post('/conversation/get', async (req, res) => {
         }
     });
 });
+
 // get Account conversations
 App.post('/conversation/info', async (req, res) => {
     const { body } = req;
@@ -821,6 +823,32 @@ App.post('/report',upload.any(), async (req, res) => {
     
     connection.query(`INSERT INTO Bug_Report values (NULL,?,?,CURRENT_TIMESTAMP)`,[message,tokendata.id],(err,result)=>{
         res.json({success:true});
+    });
+});
+
+// get community data
+App.post('/communities', async (req, res) => {
+    const { body } = req;
+    const { token,id } = body;
+
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    connection.query("select * from Communities where id = ?",[id],async (e,r)=>{
+        const community = r[0];
+        community.grant = false;
+        if (community.owner == tokendata.id){
+            community.grant = true;
+        }
+        connection.query(`
+        select Community_Post.*,Accounts.lname,Accounts.fname,Accounts.image,Accounts.username
+        from Community_Post,Accounts,Community_Comments
+        where Community_Post.community = ?
+        and Community_Post.writer = Accounts.id
+        and Community_Comments.community_Post = Community_Post.id
+        group by Community_Post.id 
+        `,[id],async (e,r)=>{
+            community.posts = r;
+            return res.json({success:true,msg:community});
+        });
     });
 });
 
