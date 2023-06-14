@@ -45,7 +45,8 @@ const drive = google.drive({ version: 'v3',auth:oauth2Client });
 
 const uploadFile = async (fileObject) => {
     const bufferStream = new stream.PassThrough();
-    bufferStream.end(await sharp(fileObject.buffer).webp({ quality: 20 }).toBuffer());
+    bufferStream.end(/image\/./.test(fileObject.mimeType) ? await sharp(fileObject.buffer).webp({ quality: 20 }).toBuffer() : null);
+
     const { data } = await drive.files.create({
       media: {
         mimeType: fileObject.mimeType,
@@ -832,22 +833,27 @@ App.post('/communities', async (req, res) => {
     const { token,id } = body;
 
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    connection.query("select * from Communities where id = ?",[id],async (e,r)=>{
+    connection.query("select Communities.*,Accounts.username from Communities,Accounts where Communities.id = ? and Communities.owner = Accounts.id",[id],async (e,r)=>{
         const community = r[0];
         community.grant = false;
         if (community.owner == tokendata.id){
             community.grant = true;
         }
         connection.query(`
-        select Community_Post.*,Accounts.lname,Accounts.fname,Accounts.image,Accounts.username
-        from Community_Post,Accounts,Community_Comments
-        where Community_Post.community = ?
-        and Community_Post.writer = Accounts.id
-        and Community_Comments.community_Post = Community_Post.id
-        group by Community_Post.id 
+            select Community_Post.*,Accounts.lname,Accounts.fname,Accounts.image,Accounts.username
+            from Community_Post,Accounts
+            where Community_Post.community = ?
+            and Community_Post.writer = Accounts.id
+            group by Community_Post.id 
         `,[id],async (e,r)=>{
-            community.posts = r;
-            return res.json({success:true,msg:community});
+            connection.query("select * from Community_Vote where communities = ? and voter = ?",[id,tokendata.id],async (e,result)=>{
+                let postsIds = result.map(el=>el.community_post);
+                community.posts = r.map((element)=>{
+                    element.voted = postsIds.includes(element.id);
+                    return element;
+                })
+                return res.json({success:true,msg:community});
+            });
         });
     });
 });
@@ -871,7 +877,9 @@ App.post('/communities/add',upload.any(), async (req, res) => {
     const { body,files } = req;
     const { token,title,color } = body;
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    console.log('hi')
+    if (!files[0]){
+        return res.json({'success':false});
+    }
     const imgId = await uploadFile(files[0]);
     await drive.permissions.create({
         fileId:imgId.id,
@@ -894,6 +902,36 @@ App.post('/communities/add',upload.any(), async (req, res) => {
         res.json({success:true});
     });
 });
+// add post
+App.post('/post',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,text,type,id } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    let image = {webContentLink:''};
+    if(files[0]){
+        const imgId = await uploadFile(files[0]);
+        await drive.permissions.create({
+            fileId:imgId.id,
+            requestBody:{
+                role:"reader",
+                type:"anyone"
+            }
+        }).then(()=>{
+            return
+        })
+        image = await drive.files.get({
+            fileId:imgId.id,
+            fields:'webContentLink'
+        }).then((res)=>{
+            return res.data
+        });
+    }
+    
+    connection.query(`INSERT INTO Community_Post values (NULL,?,?,?,0,?,?,CURRENT_TIMESTAMP)`,[text,type,image.webContentLink.replace('download','view'),id,tokendata.id],(err,result)=>{
+        
+        res.json({success:true});
+    });
+});
 
 // add favorite
 App.post('/favorite/add',upload.any(), async (req, res) => {
@@ -910,6 +948,28 @@ App.post('/favorite/add',upload.any(), async (req, res) => {
         }
         connection.query(`INSERT INTO Community_Favorite values (?,?)`,[id,tokendata.id],(err,result)=>{
             res.json({success:true});
+        });
+    });
+});
+// add vote
+App.post('/post/vote',upload.any(), async (req, res) => {
+    const { body,files } = req;
+    const { token,id,idcom } = body;
+    const tokendata  = jwt.verify(token,PRIVATE_KEY);
+    
+    connection.query(`SELECT * From Community_Vote where voter = ? and community_post = ?`,[tokendata.id,id],(err,r)=>{
+        if (r.length){
+            connection.query(`DELETE From Community_Vote where voter = ? and community_post = ?`,[tokendata.id,id],(err,result)=>{
+                connection.query(`Update Community_Post set votes = votes - 1 where id = ?`,[id],(err,result)=>{
+                    res.json({success:true});
+                });
+            });
+            return;
+        }
+        connection.query(`INSERT INTO Community_Vote values (?,?,?)`,[id,idcom,tokendata.id],(err,result)=>{
+            connection.query(`Update Community_Post set votes = votes + 1 where id = ?`,[id],(err,result)=>{
+                res.json({success:true});
+            });
         });
     });
 });

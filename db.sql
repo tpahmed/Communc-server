@@ -33,12 +33,11 @@ CREATE TABLE Community_Post (
     creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE Community_Comments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    content TEXT,
-    community_Post INT REFERENCES Community_Post(id),
-    writer INT REFERENCES Accounts(id),
-    creation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE Community_Vote (
+    community_post INT REFERENCES Community_Post(id),
+    communities INT REFERENCES Communities(id),
+    voter INT REFERENCES Accounts(id),
+    PRIMARY KEY (community_post, voter,communities)
 );
 
 CREATE TABLE Community_Favorite (
