@@ -764,7 +764,7 @@ App.post('/profile/edit',upload.any(), async (req, res) => {
         Account.password = accountData.new_pass;
     }
     
-    connection.query(`UPDATE Accounts set lname = ?,fname = ?,email = ?,password = ?,theme = ? where id = ?`,[accountData.lname,accountData.fname,accountData.email,Account.password,accountData.theme,tokendata.id],(err,result)=>{
+    connection.query(`UPDATE Accounts set lname = ?,fname = ?,email = ?,password = ?,theme = ?,language = ? where id = ?`,[accountData.lname,accountData.fname,accountData.email,Account.password,accountData.theme,accountData.language,tokendata.id],(err,result)=>{
         res.json({success:true});
     });
 });
