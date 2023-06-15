@@ -95,7 +95,7 @@ setInterval(()=>{
 },1000 * 60 * 60 );
 
 
-const connection = mysql.createConnection(process.env.DATABASE_URL);
+const connection = mysql.createPool(process.env.DATABASE_URL);
 
 
 
@@ -229,22 +229,25 @@ App.post('/signup',upload.any(), async (req, res) => {
         if (result.length){
             return res.json({'success':false,'msg':result[0].email === Account.email ?  "Email already in use" :"Username already in use"});
         }
-        const imgId = await uploadFile(files[0]);
-        await drive.permissions.create({
-            fileId:imgId.id,
-            requestBody:{
-                role:"reader",
-                type:"anyone"
-            }
-        }).then(()=>{
-            return
-        })
-        Account["image"] = await drive.files.get({
-            fileId:imgId.id,
-            fields:'webContentLink'
-        }).then((res)=>{
-            return res.data
-        });
+        Account["image"] = {webContentLink:''};
+        if(files[0]){
+            const imgId = await uploadFile(files[0]);
+            await drive.permissions.create({
+                fileId:imgId.id,
+                requestBody:{
+                    role:"reader",
+                    type:"anyone"
+                }
+            }).then(()=>{
+                return
+            })
+            Account["image"] = await drive.files.get({
+                fileId:imgId.id,
+                fields:'webContentLink'
+            }).then((res)=>{
+                return res.data
+            });
+        }
         connection.query("insert into Accounts values (Null,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",[Account.username,Account.first_name,Account.last_name,Account.email,Account.password,Account.image.webContentLink.replace('download','view'),'ENG','Dark'],(err,result)=>{
             if (err){
 
@@ -700,22 +703,27 @@ App.post('/group/create',upload.any(), async (req, res) => {
     const { body,files } = req;
     const { token, name, members } = body;
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
-    const imgId = await uploadFile(files[0]);
-    await drive.permissions.create({
-        fileId:imgId.id,
-        requestBody:{
-            role:"reader",
-            type:"anyone"
-        }
-    }).then(()=>{
-        return
-    })
-    const image = await drive.files.get({
-        fileId:imgId.id,
-        fields:'webContentLink'
-    }).then((res)=>{
-        return res.data
-    });
+
+    let image = {webContentLink:''};
+    if(files[0]){
+        const imgId = await uploadFile(files[0]);
+        await drive.permissions.create({
+            fileId:imgId.id,
+            requestBody:{
+                role:"reader",
+                type:"anyone"
+            }
+        }).then(()=>{
+            return
+        })
+        const image = await drive.files.get({
+            fileId:imgId.id,
+            fields:'webContentLink'
+        }).then((res)=>{
+            return res.data
+        });
+    }
+
     connection.query("insert into Conversation values (NULL,?,?,'group',CURRENT_TIMESTAMP)",[name,image.webContentLink.replace('download','view')],(err,result)=>{
         connection.query(`insert into Conversation_Participent values (NULL,${result.insertId},?,'owner',CURRENT_TIMESTAMP)${`,(NULL,${result.insertId},?,'member',CURRENT_TIMESTAMP)`.repeat(JSON.parse(members).length)}`,[tokendata.id,...JSON.parse(members)],(err,result)=>{
             res.json({success:true});
@@ -780,25 +788,26 @@ App.post('/profile/edit/image',upload.any(), async (req, res) => {
 
     }
     catch(err){
-
     }
-
-    const imgId = await uploadFile(files[0]);
-    await drive.permissions.create({
-        fileId:imgId.id,
-        requestBody:{
-            role:"reader",
-            type:"anyone"
-        }
-    }).then(()=>{
-        return
-    })
-    const image = await drive.files.get({
-        fileId:imgId.id,
-        fields:'webContentLink'
-    }).then((res)=>{
-        return res.data
-    });
+    let image = {webContentLink:''};
+    if(files[0]){
+        const imgId = await uploadFile(files[0]);
+        await drive.permissions.create({
+            fileId:imgId.id,
+            requestBody:{
+                role:"reader",
+                type:"anyone"
+            }
+        }).then(()=>{
+            return
+        })
+        const image = await drive.files.get({
+            fileId:imgId.id,
+            fields:'webContentLink'
+        }).then((res)=>{
+            return res.data
+        });
+    }
     connection.query(`UPDATE Accounts set image = ? where id = ?`,[image.webContentLink.replace('download','view'),tokendata.id],(err,result)=>{
         res.json({success:true});
     });
