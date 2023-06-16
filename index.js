@@ -45,7 +45,7 @@ const drive = google.drive({ version: 'v3',auth:oauth2Client });
 
 const uploadFile = async (fileObject) => {
     const bufferStream = new stream.PassThrough();
-    bufferStream.end(/image\/./.test(fileObject.mimeType) ? await sharp(fileObject.buffer).webp({ quality: 20 }).toBuffer() : null);
+    bufferStream.end(await sharp(fileObject.buffer).webp({ quality: 20 }).toBuffer());
 
     const { data } = await drive.files.create({
       media: {
@@ -704,9 +704,10 @@ App.post('/group/create',upload.any(), async (req, res) => {
     const { token, name, members } = body;
     const tokendata  = jwt.verify(token,PRIVATE_KEY);
 
-    let image = {webContentLink:''};
+    let image = {webContentLink:'https://drive.google.com/file/d/1oo8tFuplo_nMJSShgsDqGYP3WWu2xDEo/view?usp=view'};
     if(files[0]){
         const imgId = await uploadFile(files[0]);
+        console.log('nn')
         await drive.permissions.create({
             fileId:imgId.id,
             requestBody:{
@@ -716,12 +717,13 @@ App.post('/group/create',upload.any(), async (req, res) => {
         }).then(()=>{
             return
         })
-        const image = await drive.files.get({
+        image = await drive.files.get({
             fileId:imgId.id,
             fields:'webContentLink'
         }).then((res)=>{
             return res.data
         });
+        console.log(image);
     }
 
     connection.query("insert into Conversation values (NULL,?,?,'group',CURRENT_TIMESTAMP)",[name,image.webContentLink.replace('download','view')],(err,result)=>{
@@ -801,7 +803,7 @@ App.post('/profile/edit/image',upload.any(), async (req, res) => {
         }).then(()=>{
             return
         })
-        const image = await drive.files.get({
+        image = await drive.files.get({
             fileId:imgId.id,
             fields:'webContentLink'
         }).then((res)=>{
